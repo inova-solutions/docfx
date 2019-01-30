@@ -4,17 +4,16 @@
 namespace Microsoft.DocAsCode.MarkdigEngine
 {
     using System;
+    using System.Collections.Generic;
     using System.Collections.Immutable;
     using System.IO;
     using System.Linq;
-
-    using MarkdigEngine.Extensions;
-
     using Markdig;
     using Markdig.Renderers;
     using Markdig.Syntax;
-    using Microsoft.DocAsCode.Plugins;
+    using MarkdigEngine.Extensions;
     using Microsoft.DocAsCode.Common;
+    using Microsoft.DocAsCode.Plugins;
 
     public class MarkdigMarkdownService : IMarkdownService
     {
@@ -140,7 +139,7 @@ namespace Microsoft.DocAsCode.MarkdigEngine
             var enableSourceInfo = enabled == null || enabled.Value;
 
             var builder = new MarkdownPipelineBuilder();
-
+            AddExtraMarkdigExtensions(builder);
             builder.UseDocfxExtensions(_context);
             builder.Extensions.Insert(0, new YamlHeaderExtension(_context));
 
@@ -201,6 +200,36 @@ namespace Microsoft.DocAsCode.MarkdigEngine
             {
                 var fallbackFileRelativePath = PathUtility.MakeRelativePath(parentFileDirectoryToDocset, physicalPath);
                 InclusionContext.PushDependency((RelativePath)fallbackFileRelativePath);
+            }
+        }
+
+        /// <summary>
+        /// Add extra markdig extensions specified in markdownEngineProperties.
+        /// Only explicit implemented extensions can be loaded to avoid conflicts with <see cref="MarkdownExtensions.UseDocfxExtensions"/>
+        /// <code>
+        /// "markdownEngineProperties": {
+        ///     "markdig.extensions": [ "gridtables" ]
+        ///  },
+        /// </code>
+        /// </summary>
+        private void AddExtraMarkdigExtensions(MarkdownPipelineBuilder builder)
+        {
+            object extraExtensions = null;
+            _parameters?.Extensions?.TryGetValue("markdig.extensions", out extraExtensions);
+            if(extraExtensions != null)
+            {
+                object[] extensions = extraExtensions as object[];
+                if(extensions != null)
+                {
+                    //Convert to Hashset for easy lookup
+                    var requested = new HashSet<string>(extensions.Cast<string>().Select(s => s.ToLower()));
+
+                    //Implement for all additional extensions explicitly allowed and not used in UseDocfxExtensions
+                    if(requested.Contains("gridtables"))
+                    {
+                        builder.UseGridTables();
+                    }
+                }
             }
         }
     }
